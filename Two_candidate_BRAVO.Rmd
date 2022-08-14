@@ -1,0 +1,126 @@
+---
+title: "Plurality Voting R code"
+author: "Jacky Lyu"
+date: "14/08/2022"
+output: html_document
+---
+
+Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/jackil/Desktop/Unimelb/2022/Semester 2/SCI30001 Plurality voting Project")
+```
+
+## R Markdown
+
+## R codes for research project "Comparison of election auditing methods for plurality contests".
+## Completed by Jacky Lyu, in supervision of Dr Damjan Vukcevic
+
+Create CSV datasets
+```{r}
+# n=number of ballots, pT = true proportion of votes to the first candidate
+tc_create_csv <- function(n, pT, name1, name2){
+  Yn = c()
+  for (i in 1:n){
+    Xn = rbinom(1,1,prob=pT)
+    if (Xn == 1){
+      Yn = append(Yn, name1)
+    } else {
+      Yn = append(Yn, name2)
+    }
+  }
+  df = data.frame(ballot = Yn)
+  return(df)
+}
+
+tc_df = tc_create_csv(100, 0.5, "Damjan", "Alex")
+write.csv(tc_df, "/Users/jackil/Desktop/Unimelb/2022/Semester 2/SCI30001 Plurality voting Project/Two candidate.csv")
+
+```
+
+
+SPRT & BRAVO for two candidates
+```{r}
+
+# Find winner between two candidates
+tcfind_winner = function(data){
+  votes = table(data$ballot)
+  if (votes[1] > votes[2]){
+    return (names(votes)[1])
+  } else {
+    return (names(votes)[2])
+  }
+}
+
+# BRAVO Audit for two-candidate voting.
+BRAVO <- function(data, alpha, pR){
+  # find true parameters in the data
+  wT = tcfind_winner(data)
+  n = length(data$ballot)
+  max_size = 100
+  
+  # perform iterative sampling algorithm
+  Test_Stat = 1
+  for (i in 1:max_size){
+    Xi = sample(data$ballot, 1)
+    if (Xi == wT){
+      Test_Stat = Test_Stat*pR/0.5
+    } else {
+      Test_Stat = Test_Stat*(1-pR)/0.5
+    }
+    
+    if (Test_Stat > 1/alpha){
+      return (c(i, 1))
+    }
+  }  
+  return(c(max_size, 0))
+}
+
+#compare results
+compare_results <- function(data, reported, true){
+    if (reported == true) {
+      return (1)
+    } else {
+      return (0)
+    }
+}
+```
+
+
+Implement Simulation for two candidate ballots
+```{r}
+tc_simulation <- function(pT, pR, trials, alpha){
+  correct_simulations = 0
+  sample_sizes = c()
+  for (trail in 1:trials) {
+    data = tc_create_csv(10000, pT, "Damjan", "Alex")
+    BRAVO_result = BRAVO(data, alpha, pR)
+    sample_size = BRAVO_result[1]
+    outcome = BRAVO_result[2]
+    
+    if ((pT>0.5) & (outcome == 1)){
+      correct_simulations = correct_simulations + 1
+    } else if ((pT<=0.5) & (outcome ==0)) {
+      correct_simulations = correct_simulations + 1
+    }
+    
+    sample_sizes = append(sample_sizes, sample_size)
+  }
+  power = correct_simulations/trials
+  mean_sample = mean(sample_sizes)
+  
+  return (c(power, mean_sample))
+}
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
