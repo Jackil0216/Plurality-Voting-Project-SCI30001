@@ -1,0 +1,46 @@
+---
+title: "Two candidate voting setup"
+author: "Jacky Lyu"
+date: "22/08/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Create datasets
+```{r}
+# n=number of ballots, pT = true proportion of votes to the first candidate, 
+# create a vector of samples
+tc_create_data <- function(n, pT, name1, name2){
+  Yn = rbinom(n, 1, pT)
+  Yn = ifelse(Yn==1, name1, name2)
+  return (Yn)
+}  
+```
+
+Find true winner and losers from a dataset
+```{r}
+# Find true winner between two candidates
+tcfind_winner = function(data){
+  votes = table(data)
+  if (votes[1] > votes[2]){
+    return (names(votes)[1])
+  } else {
+    return (names(votes)[2])
+  }
+}
+
+# Find true loser between two candidates
+tcfind_loser = function(data){
+  votes = table(data)
+  if (votes[1] < votes[2]){
+    return (names(votes)[1])
+  } else {
+    return (names(votes)[2])
+  }
+}
+```
+
+
