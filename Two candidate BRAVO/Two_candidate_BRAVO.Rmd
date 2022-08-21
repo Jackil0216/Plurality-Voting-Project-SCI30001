@@ -1,0 +1,152 @@
+---
+title: "Two candidate BRAVO R File"
+author: "Jacky Lyu"
+date: "14/08/2022"
+output: html_document
+---
+
+Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/jackil/Desktop/Unimelb/2022/Semester 2/SCI30001 Plurality voting Project")
+```
+
+## R Markdown
+
+## R codes for research project "Comparison of election auditing methods for plurality contests".
+## Completed by Jacky Lyu, in supervision of Dr Damjan Vukcevic
+
+Create CSV datasets
+```{r}
+# n=number of ballots, pT = true proportion of votes to the first candidate, 
+# create a vector of samples
+tc_create_csv <- function(n, pT, name1, name2){
+  Yn = rbinom(n, 1, pT)
+  Yn = ifelse(Yn==1, name1, name2)
+  return (Yn)
+}  
+
+tc_df = tc_create_csv(10000, 0.5, "Damjan", "Alex")
+write.csv(tc_df, "/Users/jackil/Desktop/Unimelb/2022/Semester 2/SCI30001 Plurality voting Project/Two candidate.csv")
+
+```
+
+
+SPRT & BRAVO for two candidates
+```{r}
+# Find true winner between two candidates
+tcfind_winner = function(data){
+  votes = table(data)
+  if (votes[1] > votes[2]){
+    return (names(votes)[1])
+  } else {
+    return (names(votes)[2])
+  }
+}
+
+# Find true loser between two candidates
+tcfind_loser = function(data){
+  votes = table(data)
+  if (votes[1] < votes[2]){
+    return (names(votes)[1])
+  } else {
+    return (names(votes)[2])
+  }
+}
+
+# Find the true proportion of votes for a reported winner
+find_proportion = function(data, reported_name){
+  count = sum(data == reported_name)
+  size = length(data)
+  return (count/size)
+}
+
+# BRAVO Audit for two-candidate voting.
+# returns a list containing the number of  samples tested and a boolean variable. 
+# True indicates certified/reject Ho, False indicates discertifed
+tc_BRAVO <- function(data, alpha, wR, pR, max_size = 1000){
+  # find true proportion of reported winner in the data
+  pT = find_proportion(data, wR)
+  
+  # perform iterative sampling algorithm
+  X = sample(data, max_size)
+  TS = ifelse(X == wR, pR/0.5, (1-pR)/0.5)
+  TS = cumprod(TS)
+  for (i in 1:length(TS)){
+    if (TS[i] >= 1/alpha){
+      sample_size = i
+      return (list(sample_size, TRUE))
+    }
+  }
+  return (list(max_size, FALSE))
+}
+```
+
+
+Simulation function for two candidate ballots, for a given pT, pR
+```{r}
+# perform one simulation on the BRAVO. Returns mean sample size, power, and significiance level.
+tc_simulation <- function(pT, pR, ntrials=1000, trial_size=10000, alpha=0.05){
+  
+  correct_certifications = 0
+  incorrect_certifications = 0
+  
+  data = tc_create_csv(trial_size, pT, "Damjan", "Alex")
+  
+  #first, set the reported probability with the reported winner as true winner (correct report) 
+  wT = tcfind_winner(data)
+  
+  correct_winner_trials = replicate(ntrials, tc_BRAVO(data, alpha, wT, pR))
+  cw_sample_sizes = correct_winner_trials[1,]
+  cw_outcomes = correct_winner_trials[2,]
+  correct_certifications = sum(cw_outcomes == TRUE)
+  
+  power = correct_certifications/ntrials
+  
+  #then, test the reported probability with an actually false reported winner (false report)
+  lT = tcfind_loser(data)
+  
+  false_winner_trials = replicate(ntrials, tc_BRAVO(data, alpha, lT, pR))
+  fw_sample_sizes = false_winner_trials[1,]
+  fw_outcomes = false_winner_trials[2,]
+  incorrect_certifications = sum(fw_outcomes == TRUE)
+  
+  sig_level = incorrect_certifications/ntrials
+  
+  #lastly, calculate the mean sample size tested
+  mean_sample_size = mean(unlist(list(cw_sample_sizes, fw_sample_sizes)))
+  
+  return (list(power, sig_level, mean_sample_size))
+}
+```
+
+Run Simulation over a range of inputs
+```{r}
+# True proportion and reported proportion values wish to be tested
+pT = rep(c(0.52,0.55,0.60), 3)
+pR = c(rep(0.7, 3), rep(0.55, 3), rep(0.51, 3))
+tc_BRAVO_input = data.frame(pT, pR)
+                          
+power = c()
+sig_level = c()
+mean_sample_size = c()
+
+# record power, sig level, mean sample size for each pair of pT, pR tested
+for (i in 1:length(tc_BRAVO_input$pT)){
+ outcome = tc_simulation(tc_BRAVO_input$pT[i],tc_BRAVO_input$pR[i])
+ power[i] = outcome[1]
+ sig_level[i] = outcome[2]
+ mean_sample_size[i] = outcome[3]
+}
+
+# output results as a dataframe
+tc_BRAVO_result = data.frame(pT, pR, unlist(power), unlist(sig_level), unlist(mean_sample_size))
+colnames(tc_BRAVO_result) = c("pT", "pR", "Power", "Significance Level", "Mean Sample Size")
+write.csv(tc_BRAVO_result, "/Users/jackil/Desktop/Unimelb/2022/Semester 2/SCI30001 Plurality voting Project/Two candidate result.csv")
+
+
+```
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
