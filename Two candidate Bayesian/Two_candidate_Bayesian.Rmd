@@ -1,0 +1,82 @@
+---
+title: "Two Candidate Voting Bayesian"
+author: "Jacky Lyu"
+date: "22/08/2022"
+output: html_document
+---
+```{r}
+## Threshold upset probabilities
+tc_Bayesian <- function(data, wR, max_size=1000, v=0.05){
+  
+  Y = sample(data, max_size, replace = TRUE)
+  winner_count = cumsum(Y == wR)
+  sample_size = 1:max_size
+  
+  Sn = Bayesian_Factor(sample_size, winner_count)
+  
+  h = (1-v)/v
+  Test = which(Sn>h)
+  if (length(Test) == 0){
+    return (list(max_size, FALSE))
+  } else {
+    return(list(Test[1], TRUE))
+  }
+}
+
+Bayesian_Factor <- function(size, success){
+  
+  H0_likelihood = pbeta(0.5, success+1, size-success+1)
+  H1_likelihood = pbeta(1, success+1, size-success+1) - 
+                  pbeta(0.5, success+1, size-success+1)
+  return (H1_likelihood/H0_likelihood)
+  
+}
+
+```
+
+Simulation function for two candidate ballots, for a given pT, upset probability limit v.
+```{r}
+# perform one simulation on the Bayesian. Returns mean sample size, power, and significiance level.
+tc_Bayesian_simulation <- function(pT, ntrials=1000, trial_size=10000, up_limit=0.05){
+  
+  certifications = 0
+  
+  data = tc_create_data(trial_size, pT, "Damjan", "Alex")
+  
+  trials = replicate(ntrials, tc_Bayesian(data, "Damjan", v=up_limit))
+  sample_sizes = trials[1,]
+  outcomes = trials[2,]
+  certifications = sum(tcoutcomes == TRUE)
+  
+  certification_rate = certifications/ntrials
+  
+  #lastly, calculate the mean sample size tested
+  mean_sample_size = mean(unlist(sample_sizes))
+  
+  return (list(certification_rate, mean_sample_size))
+}
+```
+
+
+```{r}
+# True proportion and reported proportion values wish to be tested
+number_of_pT = 6
+
+pT = c(0.4, 0.45, 0.5, 0.52,0.55,0.60)
+                          
+certification_rate = c()
+mean_sample_size = c()
+
+# record power, sig level, mean sample size for each pair of pT, pR tested
+for (i in 1:length(pT)){
+ outcome = tc_Bayesian_simulation(pT[i])
+ certification_rate[i] = outcome[1]
+ mean_sample_size[i] = outcome[2]
+}
+
+# output results as a dataframe
+tc_Bayesian_result = data.frame(pT, unlist(certification_rate), unlist(mean_sample_size))
+colnames(tc_Bayesian_result) = c("pT",  "Certification Rate", "Mean Sample Size")
+
+
+```
