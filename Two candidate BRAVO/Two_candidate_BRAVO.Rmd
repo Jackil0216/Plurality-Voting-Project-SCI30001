@@ -1,0 +1,111 @@
+---
+title: "Two candidate BRAVO R File"
+author: "Jacky Lyu"
+date: "14/08/2022"
+output: html_document
+---
+
+Setup
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+## R codes for research project "Comparison of election auditing methods for plurality contests".
+## Completed by Jacky Lyu, in supervision of Dr Damjan Vukcevic
+
+Create datasets
+```{r}
+
+tc_df = tc_create_data(10000, 0.5, "Damjan", "Alex")
+
+```
+
+
+SPRT & BRAVO for two candidates
+```{r}
+# Find the true proportion of votes for a reported winner
+find_proportion = function(data, reported_name){
+  count = sum(data == reported_name)
+  size = length(data)
+  return (count/size)
+}
+
+# BRAVO Audit for two-candidate voting.
+# returns a list containing the number of  samples tested and a boolean variable. 
+# True indicates certified/reject Ho, False indicates discertifed
+tc_BRAVO <- function(data, alpha, wR, pR, max_size = 8000){
+  # find true proportion of reported winner in the data
+  pT = find_proportion(data, wR)
+  
+  # perform iterative sampling algorithm
+  X = sample(data, max_size, replace = FALSE)
+  TS = ifelse(X == wR, pR/0.5, (1-pR)/0.5)
+  TS = cumprod(TS)
+  for (i in 1:length(TS)){
+    if (TS[i] >= 1/alpha){
+      sample_size = i
+      return (list(sample_size, TRUE))
+    }
+  }
+  return (list(max_size, FALSE))
+}
+```
+
+
+Simulation function for two candidate ballots, for a given pT, pR
+```{r}
+# perform one simulation on the BRAVO. Returns mean sample size, power, and significiance level.
+tc_BRAVO_simulation <- function(pT, pR, ntrials=1000, trial_size=10000, alpha=0.05){
+  
+  certifications = 0
+  
+  data = tc_create_data(trial_size, pT, "Damjan", "Alex")
+  
+  trials = replicate(ntrials, tc_BRAVO(data, alpha, "Damjan", pR))
+  sample_sizes = trials[1,]
+  sample_outcomes = trials[2,]
+  certifications = sum(sample_outcomes == TRUE)
+  
+  certification_rate = certifications/ntrials
+  
+  #lastly, calculate the mean sample size tested
+  mean_sample_size = mean(unlist(sample_sizes))
+  
+  return (list(certification_rate, mean_sample_size))
+}
+```
+
+Run Simulation over a range of inputs
+```{r}
+# True proportion and reported proportion values wish to be tested
+number_of_pT = 6
+number_of_pR = 3
+
+pT = rep(c(0.4, 0.45, 0.5, 0.52,0.55,0.60), number_of_pR)
+pR = c(rep(0.7, number_of_pT), 
+       rep(0.55, number_of_pT), 
+       rep(0.51, number_of_pT))
+
+tc_BRAVO_input = data.frame(pT, pR)
+                          
+certification_rate = c()
+mean_sample_size = c()
+
+# record power, sig level, mean sample size for each pair of pT, pR tested
+for (i in 1:length(tc_BRAVO_input$pT)){
+ outcome = tc_BRAVO_simulation(tc_BRAVO_input$pT[i],tc_BRAVO_input$pR[i])
+ certification_rate[i] = outcome[1]
+ mean_sample_size[i] = outcome[2]
+}
+
+# output results as a dataframe
+tc_BRAVO_result = data.frame(pT, pR, unlist(certification_rate), unlist(mean_sample_size))
+colnames(tc_BRAVO_result) = c("pT", "pR", "Certification Rate", "Mean Sample Size")
+
+```
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
