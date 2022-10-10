@@ -1,0 +1,70 @@
+---
+title: "Plurality BRAVO"
+author: "Jacky Lyu"
+date: "29/08/2022"
+output: word_document
+---
+Plurality BRAVO test
+```{r}
+BRAVO_test <- function(data, pR, wR, alpha=0.05, max_sample=2000,
+                       names = c("Damjan", "Alex", "Jacky")){
+  # Find the losers
+  losers = names[names != wR]
+  s_wl = rep(0, length(losers))
+  
+  # Calculate respective losers probabilities against winners, save it in a vector 
+  for (i in 1:length(losers)) {
+    s_wl[i] = pR[1]/(pR[1]+pR[i+1]) 
+  }
+  
+  X = sample(data, max_sample, replace = FALSE)
+  
+  # This list will contain the t for rejection, for each loser. 
+  indexes_of_rejection = rep(0, length(losers))
+  
+  # For each loser, calculate Twl, then find the index in which Twl>1/alpha
+  for (i in 1:length(losers)) {
+
+    loser = losers[i]
+    swl = s_wl[i] 
+    TS = ifelse(X != wR & X != loser, 1, X)
+    TS = ifelse(TS == wR, swl/0.5, TS)
+    TS = ifelse(TS == loser, (1-swl)/0.5, TS)
+    TS = cumprod(TS)
+    
+    indexes_of_rejection[i] = which(TS > 1/alpha)[1]
+  }
+  
+  if (any(is.na(indexes_of_rejection))) {
+    return (list(max_sample, FALSE))
+  } else {
+    return (list(max(indexes_of_rejection), TRUE))
+  }
+
+}
+```
+
+The simulation function
+```{r}
+BRAVO_simulation <- function(pT, pR, ntrials=100, trial_size=20000, alpha=0.05, 
+                             names = c("Damjan", "Alex", "Jacky", "Burger", "Fries")){
+  
+  certifications = 0
+  
+  data = create_dataset(trial_size, pT, names = names)
+  
+  trials = replicate(ntrials, BRAVO_test(data, pR, "Damjan", alpha=alpha, 
+                                         names=names))
+  sample_sizes = trials[1,]
+  sample_outcomes = trials[2,]
+  certifications = sum(sample_outcomes == TRUE)
+  
+  certification_rate = certifications/ntrials
+  
+  #lastly, calculate the mean sample size tested
+  mean_sample_size = mean(unlist(sample_sizes))
+  
+  return (list(certification_rate, mean_sample_size))
+}
+
+```
