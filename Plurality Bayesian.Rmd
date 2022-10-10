@@ -1,0 +1,114 @@
+---
+title: "Plurality Bayesian"
+author: "Jacky Lyu"
+date: "05/09/2022"
+output: html_document
+---
+```{r}
+library(extraDistr)
+library(plyr)
+
+```
+
+```{r}
+Bayesian_test <- function(data, max_sample=2000, v=0.05,
+                          names = c("Damjan", "Alex", "Jacky")) {
+  
+  Y = sample(data, max_sample, replace = TRUE)
+  
+  h = (1-v)/v
+  
+  tally = c()
+  for (i in 1:max_sample) {
+    # add a function for table
+    tally = c(tally, count_tally(Y[1:i], names)+1)
+  }  
+  tally = matrix(t(tally), ncol=max_sample, nrow=length(names))
+  
+  Sn = apply(tally, MARGIN=2, Bayesian_Factor)
+  
+  Test = which(Sn>h)
+
+  if (length(Test)==0){
+    return (list(max_sample, FALSE))
+  } else {
+    return(list(Test[1], TRUE))
+  }
+
+}
+
+
+count_tally <- function(data,data_levels){
+  return (as.numeric(table(factor(data, levels = data_levels))))
+}
+
+Bayesian_Factor <- function(tally, n_realisations=20000){
+    
+  Y = rdirichlet(n_realisations, tally) 
+  H1_count = sum(apply(Y, 1, test_result))
+
+  return (H1_count/(n_realisations-H1_count))   
+}
+
+
+# input a probability vector with the first entry as the probability assigned to 
+# the reported winner. If the winner probability is the greatest amongst all 
+# probablities, return TRUE. Else, return false.
+test_result <- function(probs){
+  if (sum(probs>probs[1]) == 0){
+    return (TRUE)
+  }
+  return (FALSE)
+}
+```
+
+
+Simulation function for two candidate ballots, for a given pT, upset probability limit v.
+```{r}
+# perform one simulation on the Bayesian. Returns mean sample size, power, and significiance level.
+Bayesian_simulation <- function(pT, ntrials=100, trial_size=20000, up_limit=0.05,
+                                names = c("Damjan", "Alex", "Jacky","Burger", "Fries")){
+  
+  certifications = 0
+  
+  data = create_dataset(trial_size, pT, names = names)
+  
+  trials = replicate(ntrials, Bayesian_test(data, v=up_limit, names=names))
+  sample_sizes = trials[1,]
+  outcomes = trials[2,]
+  certifications = sum(outcomes == TRUE)
+  
+  certification_rate = certifications/ntrials
+  
+  #lastly, calculate the mean sample size tested
+  mean_sample_size = mean(unlist(sample_sizes))
+  
+  return (list(certification_rate, mean_sample_size))
+}
+```
+
+Five Candidate scenario
+```{r}
+set.seed(10)
+Bayesian_simulation(c(0.3, 0.4, 0.1, 0.1, 0.1))
+Bayesian_simulation(c(0.2, 0.2, 0.2, 0.2, 0.2))
+mc_test(c(0.49,0.48,0.03), 100)
+mc_test(c(0.7,0.2,0.1), 100)
+Bayesian_simulation(c(0.3, 0.3, 0.3, 0.05, 0.05))
+Bayesian_simulation(c(0.4, 0.35, 0.05, 0.05, 0.05)
+Bayesian_simulation(c(0.7, 0.1, 0.1, 0.05, 0.05)])
+
+
+```
+
+
+
+```{r}
+set.seed(10)
+a = lapply(five_candidate_pT, Bayesian_simulation)
+mc_test(c(0.49,0.48,0.03), 100)
+mc_test(c(0.7,0.2,0.1), 100)
+b = lapply(five_candidate_pT, mc_test)
+```
+
+
