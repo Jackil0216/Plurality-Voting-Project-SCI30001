@@ -1,0 +1,128 @@
+---
+title: "Plurality PPR"
+author: "Jacky Lyu"
+date: "02/10/2022"
+output: word_document
+---
+
+Set up, create dataset
+```{r}
+create_dataset <- function(size=10000, p_true = c(0.5, 0.3, 0.2),
+                           names = c("Damjan", "Alex", "Jacky")){
+  Yn = rep(names, size*p_true)
+  return (Yn)
+}
+
+```
+
+The PPR audit
+```{r}
+# function that runs the audit. The first name in names is the reported winner
+PPR_test <- function(data, max_sample=2000, alpha=0.05,
+                          names = c("Damjan", "Alex", "Jacky")) {
+  
+  #take sample
+  Y = sample(data, max_sample, replace = TRUE)
+  
+  # calculate tally for every sample
+  tally = c()
+  
+  for (i in 1:max_sample) {
+    tally = c(tally, count_tally(Y[1:i], names))
+  }  
+  
+  tally = matrix(t(tally), ncol=max_sample, nrow=length(names))
+  
+  # for every column which corresponds to a tally, calculate the Rn value
+  Rn = apply(tally, MARGIN=2, PPR)
+  
+  # test which Rn >= 1/alpha so we can stop and certify.
+  # If the test returns a non empty list, then it is the index
+  # Else if it is empty, then means no entry satisfies the condition.
+  Test = which(Rn >= log(1/alpha))
+
+  if (length(Test)==0){
+    return (list(max_sample, FALSE))
+  } else {
+    return(list(Test[1], TRUE))
+  }
+
+}
+
+# Function that counts the tally for an input data.
+count_tally <- function(data,data_levels){
+  return (as.numeric(table(factor(data, levels = data_levels))))
+}
+
+# Calculation of PPR, given a tally. The first name in tally is always reported winner.
+PPR <- function(tally){
+  
+  n = sum(tally)
+  k = length(tally)
+  
+  p = tally/n
+  coefficient = c(n+k-1, tally, k-1)
+  
+  # Check if the probability calculated lies in H0.
+  # if not, update p
+  if (!p_lies_in_H0(p)) {
+    # find the runner up, k-1 is the second largest element
+    runner_up_votes = sort(tally)[k-1]
+    # find the index the runner up
+    runner_up_index = which(tally == runner_up_votes)[1]
+    # update probability
+    p[1] = p[runner_up_index] = (tally[1]+runner_up_votes)/(2*n)
+  } 
+  
+  return (-(log_multinomial(coefficient) + sum(tally*log(p))))
+}
+
+# input a probability vector p, check if p lies in H0. First entry corresponds
+# to p1/p of reported winner.
+p_lies_in_H0 <- function(p){
+  if (sum(p>=p[1]) == 1){
+    return (FALSE)
+  }
+  return (TRUE)
+}
+
+# Calculate the log of an multinomial coefficient. First entry in vector is
+# the numerator, all the entries left in the vector is numerator. 
+log_multinomial <- function(n){
+  
+  return (sum_log(n[1]) - sum(sapply(n[2:length(n)], sum_log)))
+  
+}
+
+sum_log <- function(x){
+  return (sum(log(1:x)))
+}
+
+```
+
+```{r}
+# perform one simulation on the Bayesian. Returns mean sample size, power, and significiance level.
+PPR_simulation <- function(pT, ntrials=100, trial_size=20000, max_sample=2000,       
+                           up_limit=0.01, names = c("Damjan", "Alex", "Jacky",
+                                                    "Double Cheeseburger", "Fries")){
+  
+  certifications = 0
+  
+  data = create_dataset(trial_size, pT, names = names)
+  
+  trials = replicate(ntrials, PPR_test(data, max_sample=max_sample,
+                                       alpha=up_limit, names=names))
+  sample_sizes = trials[1,]
+  outcomes = trials[2,]
+  certifications = sum(outcomes == TRUE)
+  
+  certification_rate = certifications/ntrials
+  
+  #lastly, calculate the mean sample size tested
+  mean_sample_size = mean(unlist(sample_sizes))
+  
+  return (list(certification_rate, mean_sample_size))
+}
+```
+
+```
